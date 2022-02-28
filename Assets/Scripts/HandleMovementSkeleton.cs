@@ -70,8 +70,6 @@ public class HandleMovementSkeleton : MonoBehaviour
         else if (oculusTrackingState == TrackingState.NEW_VALUES)
             recenterTime += Time.deltaTime * 2;
 
-        Debug.Log($"Evolution of recenter {recenterTime}");
-
         if (oculusTrackingState == TrackingState.OUT && leapTrackingState == TrackingState.OUT)
         {
             return;

@@ -45,9 +45,9 @@ public class HandleCube : MonoBehaviour
         Quaternion rot = Quaternion.AngleAxis(180, Vector3.forward) * Quaternion.AngleAxis(90, Vector3.up);
         Vector3 localCollision_giantHand_Pos = rot * localCollision_leftHand_Pos;
         Vector3 offset = current_giantHandRotation * localCollision_giantHand_Pos;
-        offset.x *= 50;
+        offset.x *= 60;
         offset.y *= 10;
-        offset.z *= 50;
+        offset.z *= 60;
 
         a.transform.position = current_giantHandPosition + offset + 5 * Vector3.up;
 
