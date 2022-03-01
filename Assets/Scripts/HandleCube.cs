@@ -1,27 +1,29 @@
 using UnityEngine;
+using System.Collections.Generic;
 using static OVRSkeleton;
 
 public class HandleCube : MonoBehaviour
 {
     public Transform Tip;
-    public GameObject cubePrefab1;
-    public GameObject cubePrefab2;
+    public GameObject cubePrefab;
     public Transform leftHand;
     public Transform giantHand;
+    public List<MoleTile> tiles;
+    float interactionResolution = 5;
+    public IndicatorBehaviour indicator;
     public enum interactionState
     {
         SPAWN,
-        PICK,
-        RELEASE,
+        HIT,
     }
 
-    public interactionState currentInteraction = interactionState.SPAWN;
+    public interactionState currentInteraction;
 
     private void Update()
     {
         transform.position = Tip.position;
         transform.rotation = Tip.rotation;
-        transform.position -= 0.07f * Tip.up;
+        transform.position += 0.02f * Tip.up;
     }
 
     private void OnTriggerEnter(Collider other)
@@ -30,52 +32,44 @@ public class HandleCube : MonoBehaviour
             return;
 
         Quaternion current_giantHandRotation = giantHand.transform.rotation;
-        Vector3 current_giantHandPosition = giantHand.transform.position;
-
-        Debug.Log($"collision {other.name}");
+        Vector3 current_giantHandPosition = giantHand.transform.position;        
         
-        GameObject a;
-        if (currentInteraction == interactionState.SPAWN)
-            a = GameObject.Instantiate(cubePrefab1);
-        else
-            a = GameObject.Instantiate(cubePrefab2);
-
         Vector3 localCollision_leftHand_Pos = leftHand.transform.InverseTransformPoint(other.ClosestPoint(transform.position));
 
         Quaternion rot = Quaternion.AngleAxis(180, Vector3.forward) * Quaternion.AngleAxis(90, Vector3.up);
         Vector3 localCollision_giantHand_Pos = rot * localCollision_leftHand_Pos;
         Vector3 offset = current_giantHandRotation * localCollision_giantHand_Pos;
-        offset.x *= 60;
-        offset.y *= 10;
-        offset.z *= 60;
+        offset.x *= 100;
+        offset.y *= 20;
+        offset.z *= 100;
 
-        a.transform.position = current_giantHandPosition + offset + 5 * Vector3.up;
+        Vector3 interactionPos = current_giantHandPosition + offset + 5 * Vector3.up;
 
 
-        Debug.Log("test rot");
-        Debug.Log($"test rot  local to output {1000 * localCollision_leftHand_Pos}");
-        Debug.Log($"test rot  local to giant {1000 * localCollision_giantHand_Pos}");
-        Debug.Log($"test rot  giant rot {current_giantHandRotation}");
-        Debug.Log($"test rot  global {1000 * offset}");
-        Debug.Log($"#######");
-
-        /* Vector3 localCollisionPos = other.transform.InverseTransformPoint(other.ClosestPoint(transform.position));
-        foreach (OVRBone bone in giantRightHandSkeleton.Bones)
+        if (currentInteraction == interactionState.SPAWN)
         {
-            string capsuleName = OVRSkeleton.BoneLabelFromBoneId(OVRSkeleton.SkeletonType.HandRight, bone.Id) + "_CapsuleCollider";
-            if (capsuleName.Equals(other.name))
+            GameObject a = GameObject.Instantiate(cubePrefab);
+            a.transform.position = interactionPos;
+        }
+        else if (currentInteraction == interactionState.HIT)
+        {
+            int closestMole = -1;
+            float minDistance = float.MaxValue;
+            for(int i=0; i <tiles.Count; i++)
             {
-                GameObject a;
-                if (currentInteraction  == interactionState.SPAWN)
-                    a = GameObject.Instantiate(cubePrefab1);
-                else
-                    a = GameObject.Instantiate(cubePrefab2);
-                Vector3 newPos = bone.Transform.TransformPoint(localCollisionPos);
-                newPos.y += 4;
-                a.transform.position = newPos;
-                a.name = "Cube" + bone.Id.ToString();
-
+                float current_distance = (interactionPos - tiles[i].gameObject.transform.position).magnitude;
+                if (tiles[i].currentState != MoleTile.MoleState.DOWN && current_distance < minDistance)
+                {
+                    minDistance = current_distance;
+                    closestMole = i;
+                }
             }
-        }*/
+            if (closestMole != -1 && minDistance < interactionResolution)
+            {
+                tiles[closestMole].ChangeState(true);
+                indicator.Indicate(tiles[closestMole].gameObject.transform.position);
+                
+            }
+        }
     }
 }

@@ -2,7 +2,6 @@ using UnityEngine;
 using static OVRSkeleton;
 using System.Collections.Generic;
 
-
 public class HandleMovementSkeleton : MonoBehaviour
 {
     // Start is called before the first frame update
@@ -13,21 +12,23 @@ public class HandleMovementSkeleton : MonoBehaviour
     TrackingState leapTrackingState;
     TrackingState oculusTrackingState;
     public Transform OutputHand;
+    public Leap.Unity.LeapProvider leapProvider;
 
     Dictionary<string, Vector3> positionLeap;
     Dictionary<string, Vector3> positionOculus;
-    Dictionary<string, Vector3> offsetLeap;
-    Dictionary<string, Vector3> offsetOculus;
+    static Vector3 centerOfMassOculus = Vector3.zero;
+    static Vector3 centerOfMassLeap = Vector3.zero;
+    static int nbValuesOculus = 0;
+    static int nbValuesLeap = 0;
+
     Dictionary<string, Quaternion> rotationLeap;
     Dictionary<string, Quaternion> rotationOculus;
-    Dictionary<string, Quaternion> rotationalVelocityLeap;
-    Dictionary<string, Quaternion> rotationalVelocityOculus;
 
-    float recenterTime = 0;
-    float coefOculus = 0;
-    float coefLeap = 0;
+    float coef = 0; // 0 Leap 1 Oculus
 
     public Material color;
+
+    static Vector3 leapInputOutputOffset = Vector3.zero;
 
     void Start()
     {
@@ -35,12 +36,8 @@ public class HandleMovementSkeleton : MonoBehaviour
         oculusTrackingState = TrackingState.OUT;
         positionLeap = new Dictionary<string, Vector3>();
         positionOculus = new Dictionary<string, Vector3>();
-        offsetLeap = new Dictionary<string, Vector3>();
-        offsetOculus = new Dictionary<string, Vector3>();
         rotationLeap = new Dictionary<string, Quaternion>();
         rotationOculus = new Dictionary<string, Quaternion>();
-        rotationalVelocityLeap = new Dictionary<string, Quaternion>();
-        rotationalVelocityOculus = new Dictionary<string, Quaternion>();
 
         foreach (Transform outputchild in OutputHand.GetComponentsInChildren<Transform>())
         {
@@ -48,83 +45,104 @@ public class HandleMovementSkeleton : MonoBehaviour
             {
                 positionLeap[outputchild.name] = outputchild.position;
                 positionOculus[outputchild.name] = outputchild.position;
-                offsetLeap[outputchild.name] = outputchild.position;
-                offsetOculus[outputchild.name] = outputchild.position;
                 rotationLeap[outputchild.name] = outputchild.rotation;
                 rotationOculus[outputchild.name] = outputchild.rotation;
-                rotationalVelocityLeap[outputchild.name] = Quaternion.identity;
-                rotationalVelocityOculus[outputchild.name] = Quaternion.identity;
             }
         }
     }
     void Update()
     {
-        leapTrackingState = UpdateTrackingState(inputLeap.gameObject.activeInHierarchy, leapTrackingState);
+        Leap.Frame frame = leapProvider.CurrentFrame;
+        List<Leap.Hand> hands = frame.Hands;
+        float leapConfidence = 0;
+        foreach (Leap.Hand hand in hands)
+        {
+            if (hand.IsRight == isRight)
+                leapConfidence += hand.Confidence;
+        }
+
+        leapTrackingState = UpdateTrackingState(inputLeap.gameObject.activeInHierarchy && leapConfidence > 0.5f, leapTrackingState);
         oculusTrackingState = UpdateTrackingState(inputOculus.GetComponent<OVRHand>().IsTracked && inputOculus.GetComponent<OVRHand>().HandConfidence == OVRHand.TrackingConfidence.High, oculusTrackingState);
+
         UpdateLeapData();
         UpdateOculusData();
 
-
-        if (oculusTrackingState == TrackingState.CONTINUITY)
-            recenterTime -= Time.deltaTime;
-        else if (oculusTrackingState == TrackingState.NEW_VALUES)
-            recenterTime += Time.deltaTime * 2;
-
-        if (oculusTrackingState == TrackingState.OUT && leapTrackingState == TrackingState.OUT)
-        {
-            return;
-        }
-
-        if ((recenterTime <= 0 && oculusTrackingState != TrackingState.OUT) || 
-            (oculusTrackingState == TrackingState.NEW_VALUES && leapTrackingState == TrackingState.NEW_VALUES))
-        {
-            foreach (Transform outputChild in OutputHand.GetComponentsInChildren<Transform>())
-            {
-                if (mapOutputToOculus(outputChild.name) != BoneId.Invalid)
-                {
-                    outputChild.position = positionOculus[outputChild.name];
-                    outputChild.rotation = rotationOculus[outputChild.name];
-                }
-            }
-            recenterTime = 50;
-            return;
-        }
-        
         if (oculusTrackingState == TrackingState.CONTINUITY && leapTrackingState == TrackingState.CONTINUITY)
         {
-            coefOculus = Mathf.Max(0.8f, coefOculus + Time.deltaTime * (0.8f - coefOculus) / 10);
-            coefLeap = Mathf.Max(0.2f, coefLeap + Time.deltaTime * (0.2f - coefLeap) / 10);
+            coef = 1 - leapConfidence/2;
         }
         else if (leapTrackingState == TrackingState.CONTINUITY)
         {
-            coefOculus = Mathf.Max(0, coefOculus + Time.deltaTime * (0 - coefOculus) / 10);
-            coefLeap = Mathf.Max(1, coefLeap + Time.deltaTime * (1 - coefLeap) / 10);
+            coef = 0;
         }
         else if (oculusTrackingState == TrackingState.CONTINUITY)
         {
-            coefOculus = Mathf.Max(1, coefOculus + Time.deltaTime * (1 - coefOculus) / 10);
-            coefLeap = Mathf.Max(0, coefLeap + Time.deltaTime * (0 - coefLeap) / 10);
+            coef = 1;
         }
 
-        color.color = coefOculus * Color.blue + coefLeap * Color.red;
+        color.color = coef * Color.blue + (1 - coef) * Color.red;
+
+
+        if (nbValuesOculus < 500  && oculusTrackingState == TrackingState.CONTINUITY)
+        {
+            Vector3 newcenterOfMassOculus = Vector3.zero;
+            int nbBones = 0;
+            foreach (Transform outputchild in OutputHand.GetComponentsInChildren<Transform>())
+            {
+                if (mapOutputToOculus(outputchild.name) != BoneId.Invalid)
+                {
+                    newcenterOfMassOculus += positionOculus[outputchild.name];
+                    nbBones++;
+                }
+            }
+
+            centerOfMassOculus = (nbValuesOculus * centerOfMassOculus + newcenterOfMassOculus);
+            nbValuesOculus += nbBones;
+            centerOfMassOculus = centerOfMassOculus / nbValuesOculus;
+        }
+
+        if (nbValuesLeap < 500 && leapTrackingState == TrackingState.CONTINUITY)
+        {
+            Vector3 newcenterOfMassLeap = Vector3.zero;
+            int nbBones = 0;
+            foreach (Transform outputchild in OutputHand.GetComponentsInChildren<Transform>())
+            {
+                if (mapOutputToOculus(outputchild.name) != BoneId.Invalid)
+                {
+                    newcenterOfMassLeap += positionLeap[outputchild.name];
+                    nbBones++;
+                }
+            }
+
+            centerOfMassLeap = (nbValuesLeap * centerOfMassLeap + newcenterOfMassLeap);
+            nbValuesLeap += nbBones;
+            centerOfMassLeap = centerOfMassLeap / nbValuesLeap;
+        }
+
 
         foreach (Transform outputChild in OutputHand.GetComponentsInChildren<Transform>())
         {
             if (mapOutputToOculus(outputChild.name) != BoneId.Invalid)
             {
-                Vector3 offset = coefOculus * (positionOculus[outputChild.name] - offsetOculus[outputChild.name]) + coefLeap * (positionLeap[outputChild.name] - offsetLeap[outputChild.name]);
-                outputChild.position = offsetOculus[outputChild.name] + offset;
-                outputChild.rotation = rotationOculus[outputChild.name]; 
+                Vector3 targertOculus = positionOculus[outputChild.name];
+                Vector3 targetLeap = positionLeap[outputChild.name] - centerOfMassLeap + centerOfMassOculus;
+
+                Vector3 targetposition = targetLeap;// Vector3.Lerp(targetLeap, targertOculus, coef);
+
+                outputChild.position = Vector3.MoveTowards(outputChild.position, targetposition, Time.deltaTime * 100);
+
+                Quaternion targetRotation = Quaternion.Slerp(rotationLeap[outputChild.name], rotationOculus[outputChild.name], 0.5f);
+                outputChild.rotation = targetRotation;
             }
         }
     }
     void UpdateOculusData()
-    {
+    { 
         if (oculusTrackingState != TrackingState.OUT)
         {
-            foreach (Transform inputchild in inputLeap.GetComponentsInChildren<Transform>())
+            foreach (Transform outputchild in OutputHand.GetComponentsInChildren<Transform>())
             {
-                BoneId currentID = mapOutputToOculus(inputchild.name);
+                BoneId currentID = mapOutputToOculus(outputchild.name);
                 if (currentID != BoneId.Invalid)
                 {
                     foreach (OVRBone bone in inputOculus.GetComponent<OVRSkeleton>().Bones)
@@ -132,24 +150,19 @@ public class HandleMovementSkeleton : MonoBehaviour
                         if (bone.Id == currentID)
                         {
                             Vector3 newPos = bone.Transform.position;
+                            
                             Quaternion newRot = bone.Transform.rotation;
                             Vector3 axisForward = newRot * Vector3.forward;
-                            Vector3 axisRight = newRot * Vector3.right;
                             Vector3 axisUp = newRot * Vector3.up;
-                            newRot = Quaternion.AngleAxis(-90, axisUp) * Quaternion.AngleAxis(180, axisForward) * newRot;
 
-                            if (oculusTrackingState == TrackingState.CONTINUITY)
-                            {
-                                rotationalVelocityOculus[inputchild.name] = newRot * Quaternion.Inverse(rotationOculus[inputchild.name]);
-                            }
-                            else if (oculusTrackingState == TrackingState.NEW_VALUES)
-                            {
-                                rotationalVelocityOculus[inputchild.name] = Quaternion.identity;
-                                offsetOculus[inputchild.name] = newPos;
-                            }
-
-                            positionOculus[inputchild.name] = newPos;
-                            rotationOculus[inputchild.name] = newRot;
+                            if (!isRight)
+                                newRot = Quaternion.AngleAxis(-90, axisUp) * Quaternion.AngleAxis(180, axisForward) * newRot;
+                            else
+                                newRot = Quaternion.AngleAxis(90, axisUp) * newRot;
+                                
+                            positionOculus[outputchild.name] = newPos;
+                            rotationOculus[outputchild.name] = newRot;
+                            break;
                         }
                     }
                 }
@@ -166,17 +179,7 @@ public class HandleMovementSkeleton : MonoBehaviour
                 {
                     Vector3 newPos = inputchild.position;
                     Quaternion newRot = inputchild.rotation;
-
-                    if (oculusTrackingState == TrackingState.CONTINUITY)
-                    {
-                        rotationalVelocityLeap[inputchild.name] = newRot * Quaternion.Inverse(rotationLeap[inputchild.name]);
-                    }
-                    else if (oculusTrackingState == TrackingState.NEW_VALUES)
-                    {
-                        rotationalVelocityLeap[inputchild.name] = Quaternion.identity;
-                        offsetLeap[inputchild.name] = newPos;
-                    }
-
+                   
                     positionLeap[inputchild.name] = newPos;
                     rotationLeap[inputchild.name] = newRot;
                 }
@@ -202,8 +205,6 @@ public class HandleMovementSkeleton : MonoBehaviour
     {
         switch (name)
         {
-            case "Wrist":
-                return BoneId.Hand_WristRoot;
             case "Palm":
                 return BoneId.Hand_Start;
             case "ThumbProximalJoint":
