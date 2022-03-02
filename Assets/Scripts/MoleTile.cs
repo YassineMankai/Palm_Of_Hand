@@ -12,9 +12,9 @@ public class MoleTile : MonoBehaviour
 
     public MoleState currentState;
 
-    float waitTime = 5;
-    static float lifeSpan = 10;
-    static float superLifeSpan = 5;
+    float waitTime = 0;
+    static float lifeSpan = 20;
+    static float superLifeSpan = 10;
 
     // Start is called before the first frame update
     void Start()
@@ -33,29 +33,32 @@ public class MoleTile : MonoBehaviour
         }
     }
 
-    public void ChangeState(bool isHit = false)
+    public float ChangeState(bool isHit = false)
     {
         if (currentState == MoleState.DOWN)
         {
             if (isHit)
-                return;
+                return 0;
             float test = Random.Range(0, 11);
-            if (test > 2 && test <=7)
+            if (test > 2 && test <= 7)
             {
                 currentState = MoleState.NORMAL;
                 Mole.gameObject.GetComponent<Renderer>().material = normalMaterial;
                 Mole.position = Mole.position + 1f * Vector3.up;
                 waitTime = lifeSpan;
-            } 
+            }
             else if (test > 7)
             {
                 currentState = MoleState.SUPER;
                 Mole.gameObject.GetComponent<Renderer>().material = superMaterial;
                 Mole.position = Mole.position + 1f * Vector3.up;
                 waitTime = superLifeSpan;
-                return;
             }
-            waitTime = 5;
+            else
+            {
+                waitTime = lifeSpan;
+            }
+            return 0;
         }
         else if (currentState == MoleState.SUPER && isHit)
         {
@@ -70,5 +73,10 @@ public class MoleTile : MonoBehaviour
             Mole.position = Mole.position - 1f * Vector3.up;
             waitTime = lifeSpan;
         }
+        if (isHit)
+        {
+            return 5;
+        }
+        return 0;
     }
 }

@@ -67,19 +67,25 @@ public class HandleMovementSkeleton : MonoBehaviour
         UpdateLeapData();
         UpdateOculusData();
 
+        if (oculusTrackingState == TrackingState.OUT && leapTrackingState == TrackingState.OUT)
+        {
+            return;
+        }
+
+        float newCoef;
         if (oculusTrackingState == TrackingState.CONTINUITY && leapTrackingState == TrackingState.CONTINUITY)
         {
-            coef = 1 - leapConfidence/2;
+            newCoef = 1 - leapConfidence/2;
         }
         else if (leapTrackingState == TrackingState.CONTINUITY)
         {
-            coef = 0;
+            newCoef = 0;
         }
-        else if (oculusTrackingState == TrackingState.CONTINUITY)
+        else
         {
-            coef = 1;
+            newCoef = 1;
         }
-
+        coef = Mathf.Min(1, Mathf.Max(0, coef + (newCoef - coef) * Time.deltaTime * 10));
         color.color = coef * Color.blue + (1 - coef) * Color.red;
 
 
@@ -119,17 +125,18 @@ public class HandleMovementSkeleton : MonoBehaviour
             centerOfMassLeap = centerOfMassLeap / nbValuesLeap;
         }
 
+        Debug.Log($"coef {coef}");
 
         foreach (Transform outputChild in OutputHand.GetComponentsInChildren<Transform>())
         {
             if (mapOutputToOculus(outputChild.name) != BoneId.Invalid)
             {
                 Vector3 targertOculus = positionOculus[outputChild.name];
-                Vector3 targetLeap = positionLeap[outputChild.name] - centerOfMassLeap + centerOfMassOculus;
+                Vector3 targetLeap = 0.1f*(positionLeap[outputChild.name] - centerOfMassLeap) + centerOfMassOculus;
 
-                Vector3 targetposition = targetLeap;// Vector3.Lerp(targetLeap, targertOculus, coef);
+                Vector3 targetposition = Vector3.Lerp(targetLeap, targertOculus, coef);
 
-                outputChild.position = Vector3.MoveTowards(outputChild.position, targetposition, Time.deltaTime * 100);
+                outputChild.position = targetposition;
 
                 Quaternion targetRotation = Quaternion.Slerp(rotationLeap[outputChild.name], rotationOculus[outputChild.name], 0.5f);
                 outputChild.rotation = targetRotation;
@@ -159,7 +166,12 @@ public class HandleMovementSkeleton : MonoBehaviour
                                 newRot = Quaternion.AngleAxis(-90, axisUp) * Quaternion.AngleAxis(180, axisForward) * newRot;
                             else
                                 newRot = Quaternion.AngleAxis(90, axisUp) * newRot;
-                                
+
+                            if (outputchild.name == "Palm")
+                            {
+                                newPos += 0.05f * (newRot * Vector3.forward);
+                            }
+
                             positionOculus[outputchild.name] = newPos;
                             rotationOculus[outputchild.name] = newRot;
                             break;
@@ -207,30 +219,35 @@ public class HandleMovementSkeleton : MonoBehaviour
         {
             case "Palm":
                 return BoneId.Hand_Start;
+            
             case "ThumbProximalJoint":
                 return BoneId.Hand_Thumb1;
             case "ThumbDistalJoint":
                 return BoneId.Hand_Thumb2;
             case "ThumbTip":
                 return BoneId.Hand_Thumb3;
+            
             case "IndexMiddleJoint":
                 return BoneId.Hand_Index1;
             case "IndexDistalJoint":
                 return BoneId.Hand_Index2;
             case "IndexTip":
                 return BoneId.Hand_Index3;
+            
             case "MiddleMiddleJoint":
                 return BoneId.Hand_Middle1;
             case "MiddleDistalJoint":
                 return BoneId.Hand_Middle2;
             case "MiddleTip":
                 return BoneId.Hand_Middle3;
+            
             case "RingMiddleJoint":
                 return BoneId.Hand_Ring1;
             case "RingDistalJoint":
                 return BoneId.Hand_Ring2;
             case "RingTip":
                 return BoneId.Hand_Ring3;
+            
             case "PinkyKnuckle":
                 return BoneId.Hand_Pinky0;
             case "PinkyMiddleJoint":
@@ -242,4 +259,5 @@ public class HandleMovementSkeleton : MonoBehaviour
         }
         return BoneId.Invalid;
     }
+
 }
