@@ -89,7 +89,7 @@ public class HandleMovementSkeleton : MonoBehaviour
         color.color = coef * Color.blue + (1 - coef) * Color.red;
 
 
-        if (nbValuesOculus < 500  && oculusTrackingState == TrackingState.CONTINUITY)
+        if (nbValuesOculus < 50  && oculusTrackingState == TrackingState.CONTINUITY)
         {
             Vector3 newcenterOfMassOculus = Vector3.zero;
             int nbBones = 0;
@@ -107,7 +107,7 @@ public class HandleMovementSkeleton : MonoBehaviour
             centerOfMassOculus = centerOfMassOculus / nbValuesOculus;
         }
 
-        if (nbValuesLeap < 500 && leapTrackingState == TrackingState.CONTINUITY)
+        if (nbValuesLeap < 50 && leapTrackingState == TrackingState.CONTINUITY)
         {
             Vector3 newcenterOfMassLeap = Vector3.zero;
             int nbBones = 0;
@@ -125,16 +125,17 @@ public class HandleMovementSkeleton : MonoBehaviour
             centerOfMassLeap = centerOfMassLeap / nbValuesLeap;
         }
 
-        Debug.Log($"coef {coef}");
-
         foreach (Transform outputChild in OutputHand.GetComponentsInChildren<Transform>())
         {
             if (mapOutputToOculus(outputChild.name) != BoneId.Invalid)
             {
                 Vector3 targertOculus = positionOculus[outputChild.name];
-                Vector3 targetLeap = 0.1f*(positionLeap[outputChild.name] - centerOfMassLeap) + centerOfMassOculus;
-
-                Vector3 targetposition = Vector3.Lerp(targetLeap, targertOculus, coef);
+                Vector3 targetLeap = 0.11f*(positionLeap[outputChild.name] - centerOfMassLeap) + centerOfMassOculus;
+                Vector3 targetposition;
+                if (isRight)
+                    targetposition = Vector3.Lerp(targetLeap, targertOculus, 0.7f);
+                else
+                    targetposition = Vector3.Lerp(targetLeap, targertOculus, 0.1f);
 
                 outputChild.position = targetposition;
 

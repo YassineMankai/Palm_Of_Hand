@@ -18,7 +18,7 @@ public class HandleCube : MonoBehaviour
     public Transform leftHand;
     public Transform giantHand;
     public List<MoleTile> tiles;
-    float interactionResolution = 5;
+    float interactionResolution = 3.5f;
     public IndicatorBehaviour indicator;
 
     float score = 0;
@@ -46,8 +46,6 @@ public class HandleCube : MonoBehaviour
 
         if (giantCapsule == null)
             return;
-
-        Debug.Log($"test {capsuleName} to {correspondantInGiant}");
 
         Quaternion current_giantHandRotation = giantCapsule.transform.rotation;
         Vector3 current_giantHandPosition = giantCapsule.transform.position;        
