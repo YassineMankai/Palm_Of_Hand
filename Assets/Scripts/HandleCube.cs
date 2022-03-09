@@ -55,11 +55,11 @@ public class HandleCube : MonoBehaviour
         Quaternion rot = Quaternion.AngleAxis(180, Vector3.forward) * Quaternion.AngleAxis(90, Vector3.up);
         Vector3 localCollision_giantHand_Pos = rot * localCollision_leftHand_Pos;
         Vector3 offset = current_giantHandRotation * localCollision_giantHand_Pos;
-        offset.x *= 70;
+        offset.x *= 40;
         offset.y *= 20;
-        offset.z *= 60;
+        offset.z *= 40;
 
-        Vector3 interactionPos = current_giantHandPosition + offset + 2 * Vector3.up;
+        Vector3 interactionPos = current_giantHandPosition + offset + Vector3.up;
 
 
         if (currentInteraction == interactionState.SPAWN)
